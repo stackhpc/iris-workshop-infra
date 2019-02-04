@@ -1,0 +1,6 @@
+---
+- src: mrlesmithjr.squid
+- src: stackhpc.os-networks
+  version: v1.1.0
+- src: stackhpc.os-projects
+  version: v1.2.0

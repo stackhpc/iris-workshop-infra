@@ -1,0 +1,155 @@
+---
+- name: Ensure proxy server exists
+  hosts: localhost
+  tags:
+    - proxy
+  vars:
+    ansible_python_interpreter: "{{ venv }}/bin/python"
+  tasks:
+    - name: Ensure proxy VM exists
+      os_server:
+        auth_type: "{{ openstack_auth_type }}"
+        auth: "{{ openstack_auth }}"
+        cacert: "{{ openstack_cacert | default(omit) }}"
+        # FIXME: os_server doesn't support creating a server in a different
+        # project, so switch clouds temporarily.
+        cloud: "{{ openstack_cloud_iris_workshop | default(omit) }}"
+        #project: "{{ iris_workshop_project_name }}"
+        auto_ip: true
+        boot_from_volume: false
+        delete_fip: true
+        flavor: "{{ iris_workshop_proxy_flavor }}"
+        #floating_ips: "{{ [iris_workshop_proxy_floating_ip] }}"
+        image: "{{ iris_workshop_proxy_image }}"
+        key_name: "{{ iris_workshop_proxy_keypair }}"
+        name: "{{ iris_workshop_proxy_name }}"
+        nics:
+          - net-name: "{{ iris_workshop_proxy_network }}"
+        reuse_ips: true
+        security_groups: 
+          # The server always gets the default secgroup initially for some
+          # reason, then subsequent runs will try to remove it which fails
+          # because there is more than one called default.. Include it
+          # explcitly.
+          #- default
+          - "{{ iris_workshop_proxy_security_group.name }}"
+        state: "{{ iris_workshop_state }}"
+      register: server_results
+
+    # Attach to every lab network.
+    - name: Ensure proxy is attached to lab networks
+      os_server_interface:
+        auth_type: "{{ openstack_auth_type }}"
+        auth: "{{ openstack_auth }}"
+        cacert: "{{ openstack_cacert | default(omit) }}"
+        # FIXME: os_server_interface doesn't support creating a server in a
+        # different project, so switch clouds temporarily.
+        cloud: "{{ openstack_cloud_iris_workshop | default(omit) }}"
+        #project: "{{ iris_workshop_project_name }}"
+        state: "{{ lab.state | default(iris_workshop_state) }}"
+        server_id: "{{ iris_workshop_proxy_name }}"
+        interfaces: "{{ lab.name }}"
+        security_groups:
+          - "{{ iris_workshop_proxy_security_group.name }}"
+      loop: "{{ iris_workshop_labs }}"
+      loop_control:
+        loop_var: lab
+        label: "{{ lab.name }}"
+      when: iris_workshop_state == 'present'
+
+    - name: Add proxy VM to inventory
+      add_host:
+        groups: proxy
+        name: "{{ server_results.server.name }}"
+        ansible_host: "{{ server_results.server.public_v4 }}"
+        ansible_user: "{{ iris_workshop_proxy_user }}"
+      when: iris_workshop_state == 'present'
+
+- name: Configure proxy server
+  hosts: proxy
+  gather_facts: no
+  tags:
+    - proxy
+  tasks:
+    - name: Wait for SSH access to proxy
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        state: started
+        timeout: 120
+      delegate_to: localhost
+
+    - name: Check SSH access to the proxy
+      ping:
+
+    - name: Gather facts
+      setup:
+
+    - name: Ensure all interfaces are configured
+      copy:
+        content: |-
+          BOOTPROTO=dhcp
+          DEVICE={{ interface.device }}
+          HWADDR={{ interface.macaddress }}
+          ONBOOT=yes
+          TYPE=Ethernet
+          USERCTL=no
+          {% if interface.device != ansible_default_ipv4.alias %}
+          DEFROUTE=no
+          {% endif %}
+        dest: "/etc/sysconfig/network-scripts/ifcfg-{{ interface.device }}"
+      loop: "{{ ansible_interfaces }}"
+      when:
+        - item != 'lo'
+        - not interface.active
+      vars:
+        interface: "{{ hostvars[inventory_hostname]['ansible_' ~ item] }}"
+      become: true
+
+    - name: Ensure all interfaces are up
+      command: "ifup {{ item }}"
+      loop: "{{ ansible_interfaces }}"
+      when:
+        - item != 'lo'
+        - not interface.active
+      vars:
+        interface: "{{ hostvars[inventory_hostname]['ansible_' ~ item] }}"
+      become: true
+
+    - name: Deploy a squid proxy
+      include_role:
+        role: mrlesmithjr.squid
+      vars:
+        squid_pri_domain_name: 'sausage.cloud'
+
+    - name: Ensure additional squid config exists
+      blockinfile:
+        block: "{{ iris_workshop_proxy_squid_config }}"
+        dest: /etc/squid/squid.conf
+        insertafter: EOF
+      become: true
+      notify:
+        - Restart squid
+
+    - name: Deploy a docker registry
+      include_role:
+        role: docker-registry
+
+    - name: Deploy nginx
+      include_role:
+        role: nginx
+
+    - name: Ensure CentOS7 cloud image is downloaded
+      get_url:
+        url: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2
+        dest: /nginx/CentOS-7-x86_64-GenericCloud.qcow2
+        owner: nginx
+        group: nginx
+        setype: httpd_sys_content_t
+      become: true
+  handlers:
+    - name: Restart squid
+      service:
+        name: squid
+        state: restarted
+      become: true

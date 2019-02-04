@@ -1,0 +1,16 @@
+---
+- hosts: localhost
+  tags:
+    - project
+  tasks:
+    - name: Create IRIS workshop project
+      include_role:
+        role: stackhpc.os-projects
+      vars:
+        os_projects_venv: "{{ venv }}"
+        os_projects_auth_type: "{{ openstack_auth_type }}"
+        os_projects_admin_auth: "{{ openstack_auth }}"
+        os_projects_cacert: "{{ openstack_cacert }}"
+        os_projects_cloud: "{{ openstack_cloud }}"
+        os_projects:
+          - "{{ iris_workshop_project }}"

@@ -1,0 +1,162 @@
+---
+###############################################################################
+
+# Path to create virtualenv in which to install python dependencies.
+venv: "{{ lookup('env', 'VIRTUAL_ENV') }}"
+
+###############################################################################
+
+# State of all resources. Set to 'absent' to delete.
+iris_workshop_state: present
+
+# Project used to hold resources.
+iris_workshop_project_name: iris-workshop
+iris_workshop_project:
+  name: "{{ iris_workshop_project_name }}"
+  description: IRIS Scientific OpenStack workshop
+  project_domain: default
+  user_domain: default
+  users:
+    # Add the admin user to this project to allow it to create VMs.
+    - name: admin
+      roles:
+        - admin
+        - heat_stack_owner
+  quotas: 
+    cores: -1
+    floating_ips: -1
+    injected_files: -1
+    injected_file_size: -1
+    instances: -1
+    key_pairs: -1
+    fixed_ips: -1
+    ram: -1
+    secgroup_rules: -1
+    secgroups: -1
+  state: "{{ iris_workshop_state }}"
+
+# External network used as router gateway interface.
+iris_workshop_external_network: internet
+
+# Proxy VM configuration.
+iris_workshop_proxy_name: proxy
+iris_workshop_proxy_flavor: saveloy
+iris_workshop_proxy_image: CentOS 7.5
+iris_workshop_proxy_network: proxy
+iris_workshop_proxy_keypair: mark-xps15
+iris_workshop_proxy_user: centos
+iris_workshop_proxy_port: 3128
+iris_workshop_proxy_registry_port: 5000
+iris_workshop_proxy_web_server_port: 80
+iris_workshop_proxy_security_group:
+  name: iris-workshop-proxy
+  state: "{{ iris_workshop_state }}"
+  project: "{{ iris_workshop_project_name }}"
+  rules:
+    - direction: egress
+      ethertype: IPv4
+      state: "{{ iris_workshop_state }}"
+    - direction: egress
+      ethertype: IPv6
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv4
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv6
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv4
+      protocol: tcp
+      port_range_min: 22
+      port_range_max: 22
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv6
+      protocol: tcp
+      port_range_min: 22
+      port_range_max: 22
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv4
+      protocol: icmp
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv6
+      protocol: icmp
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv4
+      protocol: tcp
+      port_range_min: "{{ iris_workshop_proxy_port }}"
+      port_range_max: "{{ iris_workshop_proxy_port }}"
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv4
+      protocol: tcp
+      port_range_min: "{{ iris_workshop_proxy_registry_port }}"
+      port_range_max: "{{ iris_workshop_proxy_registry_port }}"
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv4
+      protocol: tcp
+      port_range_min: "{{ iris_workshop_proxy_web_server_port }}"
+      port_range_max: "{{ iris_workshop_proxy_web_server_port }}"
+      state: "{{ iris_workshop_state }}"
+# Additional squid config. Allows caching of large objects and uses the
+# filesystem as a cache.
+iris_workshop_proxy_squid_config: |-
+  maximum_object_size 10 GB
+  cache_dir ufs /var/spool/squid/ 50000 16 256
+  cache_mem 5 GB
+  maximum_object_size_in_memory 100 MB
+
+# Lab VM configuration.
+iris_workshop_lab_flavor: cumberland
+iris_workshop_lab_image: CentOS 7.5
+iris_workshop_lab_keypair: mark-xps15
+iris_workshop_lab_user: centos
+iris_workshop_lab_security_group:
+  name: iris-workshop-lab
+  state: "{{ iris_workshop_state }}"
+  project: "{{ iris_workshop_project_name }}"
+  rules:
+    - direction: egress
+      ethertype: IPv4
+      state: "{{ iris_workshop_state }}"
+    - direction: egress
+      ethertype: IPv6
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv4
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv6
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv4
+      protocol: tcp
+      port_range_min: 22
+      port_range_max: 22
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv6
+      protocol: tcp
+      port_range_min: 22
+      port_range_max: 22
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv4
+      protocol: icmp
+      state: "{{ iris_workshop_state }}"
+    - direction: ingress
+      ethertype: IPv6
+      protocol: icmp
+      state: "{{ iris_workshop_state }}"
+
+# List of workshop virtual labs.
+# Example:
+# iris_workshop_labs:
+#   - name: lab1
+#     ssh_key: <public key>
+iris_workshop_labs: []

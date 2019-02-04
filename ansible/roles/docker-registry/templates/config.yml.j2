@@ -1,0 +1,15 @@
+---
+version: 0.1
+log:
+  fields:
+    service: registry
+{# Act as a pull-through cache to Dockerhub. #}
+proxy:
+    remoteurl: https://registry-1.docker.io
+storage:
+    cache:
+        layerinfo: inmemory
+    filesystem:
+        rootdirectory: /var/lib/registry
+http:
+    addr: :5000

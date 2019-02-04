@@ -1,0 +1,6 @@
+---
+- name: Restart docker-distribution
+  service:
+    name: docker-distribution
+    state: restarted
+  become: true

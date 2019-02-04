@@ -1,0 +1,76 @@
+---
+- hosts: localhost
+  tags:
+    - networks
+  tasks:
+    - name: Create network for proxy
+      include_role:
+        role: stackhpc.os-networks
+      vars:
+        os_networks_venv: "{{ venv }}"
+        os_networks_auth_type: "{{ openstack_auth_type }}"
+        os_networks_auth: "{{ openstack_auth }}"
+        os_networks_cacert: "{{ openstack_cacert }}"
+        os_networks_cloud: "{{ openstack_cloud }}"
+        os_networks:
+          # One network and subnet per lab.
+          - name: "{{ iris_workshop_proxy_network }}"
+            state: "{{ iris_workshop_state }}"
+            project: "{{ iris_workshop_project_name }}"
+            shared: false
+            subnets:
+              - name: "{{ iris_workshop_proxy_network }}"
+                state: "{{ iris_workshop_state }}"
+                project: "{{ iris_workshop_project_name }}"
+                no_gateway_ip: false
+                use_default_subnetpool: true
+        # One router for external access.
+        os_networks_routers:
+          - name: "{{ iris_workshop_proxy_network }}"
+            state: "{{ iris_workshop_state }}"
+            project: "{{ iris_workshop_project_name }}"
+            network: "{{ iris_workshop_external_network }}"
+            interfaces:
+              - "{{ iris_workshop_proxy_network }}"
+        # One security group used by all labs.
+        os_networks_security_groups:
+          - "{{ iris_workshop_proxy_security_group }}"
+
+    - name: Create networks for labs
+      include_role:
+        role: stackhpc.os-networks
+      vars:
+        os_networks_venv: "{{ venv }}"
+        os_networks_auth_type: "{{ openstack_auth_type }}"
+        os_networks_auth: "{{ openstack_auth }}"
+        os_networks_cacert: "{{ openstack_cacert }}"
+        os_networks_cloud: "{{ openstack_cloud }}"
+        os_networks:
+          # One network and subnet per lab.
+          - name: "{{ lab.name }}"
+            state: "{{ state }}"
+            project: "{{ iris_workshop_project_name }}"
+            shared: false
+            subnets:
+              - name: "{{ lab.name }}"
+                state: "{{ state }}"
+                project: "{{ iris_workshop_project_name }}"
+                no_gateway_ip: false
+                use_default_subnetpool: true
+        # One router per lab for external access.
+        os_networks_routers:
+          - name: "{{ lab.name }}"
+            state: "{{ state }}"
+            project: "{{ iris_workshop_project_name }}"
+            network: "{{ iris_workshop_external_network }}"
+            interfaces:
+              - "{{ lab.name }}"
+        # One security group used by all labs.
+        os_networks_security_groups: >-
+          {{ [iris_workshop_lab_security_group] if index == 0 else [] }}
+        state: "{{ lab.state | default(iris_workshop_state) }}"
+      loop: "{{ iris_workshop_labs }}"
+      loop_control:
+        loop_var: lab
+        label: "{{ lab.name }}"
+        index_var: index

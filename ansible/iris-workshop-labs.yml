@@ -1,0 +1,119 @@
+---
+- name: Ensure lab servers exist
+  hosts: localhost
+  tags:
+    - labs
+  vars:
+    ansible_python_interpreter: "{{ venv }}/bin/python"
+  tasks:
+    - name: Ensure lab VMs exist
+      os_server:
+        auth_type: "{{ openstack_auth_type }}"
+        auth: "{{ openstack_auth }}"
+        cacert: "{{ openstack_cacert | default(omit) }}"
+        # FIXME: os_server doesn't support creating a server in a different
+        # project, so switch clouds temporarily.
+        cloud: "{{ openstack_cloud_iris_workshop | default(omit) }}"
+        #project: "{{ iris_workshop_project_name }}"
+        auto_ip: true
+        boot_from_volume: false
+        delete_fip: true
+        flavor: "{{ iris_workshop_lab_flavor }}"
+        image: "{{ iris_workshop_lab_image }}"
+        key_name: "{{ iris_workshop_lab_keypair }}"
+        name: "{{ lab.name }}"
+        network: "{{ lab.name }}"
+        security_groups: "{{ iris_workshop_lab_security_group.name }}"
+        state: "{{ state }}"
+      vars:
+        state: "{{ lab.state | default(iris_workshop_state) }}"
+      loop: "{{ iris_workshop_labs }}"
+      loop_control:
+        loop_var: lab
+        label: "{{ lab.name }}"
+      async: 120
+      poll: 10
+      register: server_results
+
+    - name: Wait for VMs to be created
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      loop: "{{ server_results.results }}"
+      loop_control:
+        label: "{{ item.lab.name }}"
+      register: server_async_result
+      until: server_async_result.finished
+      retries: 12
+      delay: 10
+
+    - name: Add VMs to inventory
+      add_host:
+        groups: labs
+        name: "{{ item.server.name }}"
+        ansible_host: "{{ item.server.public_v4 }}"
+        ansible_user: "{{ iris_workshop_lab_user }}"
+        ssh_key: "{{ lab.ssh_key }}"
+      vars:
+        lab: "{{ iris_workshop_labs | selectattr('name', 'eq', item.server.name) | first }}"
+        state: "{{ lab.state | default(iris_workshop_state) }}"
+      loop: "{{ server_results.results }}"
+      loop_control:
+        label: "{{ item.server.name }}"
+      when: state == 'present'
+
+- name: Configure lab servers
+  hosts: labs
+  gather_facts: no
+  tags:
+    - labs
+  tasks:
+    - name: Wait for SSH access to labs
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        state: started
+        timeout: 120
+      delegate_to: localhost
+
+    - name: Pause to SSH to come up
+      pause:
+        seconds: 10
+
+    - name: Check SSH access to the labs
+      ping:
+
+    - name: Authorize the user's SSH key
+      authorized_key:
+        key: "{{ ssh_key }}"
+        user: "{{ iris_workshop_lab_user }}"
+
+    - name: Gather facts about the proxy server
+      os_server_facts:
+        auth_type: "{{ openstack_auth_type }}"
+        auth: "{{ openstack_auth }}"
+        cacert: "{{ openstack_cacert | default(omit) }}"
+        # FIXME: os_server doesn't support creating a server in a different
+        # project, so switch clouds temporarily.
+        cloud: "{{ openstack_cloud_iris_workshop | default(omit) }}"
+        #project: "{{ iris_workshop_project_name }}"
+        server: "{{ iris_workshop_proxy_name }}"
+      delegate_to: localhost
+      vars:
+        ansible_python_interpreter: "{{ venv }}/bin/python"
+
+    - name: Ensure registry and proxy are in /etc/hosts
+      blockinfile:
+        block: |-
+          {{ proxy_ip }}    registry.local proxy.local
+        dest: /etc/hosts
+      become: true
+      vars:
+        proxy_ip: "{{ (openstack_servers[0].addresses[inventory_hostname] | selectattr('OS-EXT-IPS:type', 'equalto', 'fixed') | first).addr }}"
+
+    - name: Enable use of the proxy server for Yum caching
+      ini_file:
+        path: /etc/yum.conf
+        section: main
+        option: "proxy"
+        value: "http://proxy.local:3128"
+      become: true

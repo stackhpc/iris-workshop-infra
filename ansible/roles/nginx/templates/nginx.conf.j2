@@ -1,0 +1,13 @@
+events {
+}
+
+http {
+	gzip on;
+    server {
+        listen 80;
+        location / {
+            root /nginx;
+            autoindex on;
+        }
+    }
+}

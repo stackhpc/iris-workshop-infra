@@ -1,0 +1,51 @@
+---
+- name: Ensure data directory exists
+  file:
+    path: /nginx
+    state: directory
+    owner: nginx
+    group: nginx
+    setype: httpd_sys_content_t
+  become: true
+
+#- name: "Add proper context on created data for http_boot"
+#  sefcontext:
+#    target: "/nginx(/.*)?"
+#    setype: httpd_sys_content_t
+#    state: present
+#  become: true
+
+- name: Ensure EPEL is installed
+  package:
+    name: epel-release
+    state: installed
+  become: true
+
+- name: Ensure nginx is installed
+  package:
+    name: nginx
+    state: installed
+  become: true
+
+- name: Ensure nginx is configured
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+  become: true
+  notify:
+    - Restart nginx
+
+- name: Ensure nginx is enabled
+  service:
+    name: nginx
+    enabled: true
+  become: true
+
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Ensure nginx is running
+  service:
+    name: nginx
+    state: started
+  become: true

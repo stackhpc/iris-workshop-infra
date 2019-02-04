@@ -1,0 +1,5 @@
+---
+- import_playbook: iris-workshop-projects.yml
+- import_playbook: iris-workshop-networks.yml
+- import_playbook: iris-workshop-proxy.yml
+- import_playbook: iris-workshop-labs.yml

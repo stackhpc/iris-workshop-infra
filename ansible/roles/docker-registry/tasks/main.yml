@@ -1,0 +1,29 @@
+---
+- name: Ensure docker-distribution is installed
+  package:
+    name: docker-distribution
+    state: installed
+  become: true
+
+- name: Ensure docker-distribution is configured
+  template:
+    src: config.yml.j2
+    dest: /etc/docker-distribution/registry/config.yml
+  become: true
+  notify:
+    - Restart docker-distribution
+
+- name: Ensure docker-distribution is enabled
+  service:
+    name: docker-distribution
+    enabled: true
+  become: true
+
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Ensure docker-distribution is running
+  service:
+    name: docker-distribution
+    state: started
+  become: true
