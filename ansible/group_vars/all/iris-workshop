@@ -159,4 +159,5 @@ iris_workshop_lab_security_group:
 # iris_workshop_labs:
 #   - name: lab1
 #     ssh_key: <public key>
+#     flavor: <optional flavor>
 iris_workshop_labs: []
