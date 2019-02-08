@@ -96,6 +96,7 @@
           USERCTL=no
           {% if interface.device != ansible_default_ipv4.alias %}
           DEFROUTE=no
+          PEERDNS=no
           {% endif %}
         dest: "/etc/sysconfig/network-scripts/ifcfg-{{ interface.device }}"
       loop: "{{ ansible_interfaces }}"
