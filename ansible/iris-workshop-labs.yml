@@ -32,8 +32,9 @@
         loop_var: lab
         label: "{{ lab.name }}"
       async: 120
-      poll: 10
+      poll: 0
       register: server_results
+      changed_when: false
 
     - name: Wait for VMs to be created
       async_status:
@@ -49,16 +50,17 @@
     - name: Add VMs to inventory
       add_host:
         groups: labs
-        name: "{{ item.server.name }}"
+        name: "{{ name }}"
         ansible_host: "{{ item.server.public_v4 }}"
         ansible_user: "{{ iris_workshop_lab_user }}"
         ssh_key: "{{ lab.ssh_key }}"
       vars:
-        lab: "{{ iris_workshop_labs | selectattr('name', 'eq', item.server.name) | first }}"
-        state: "{{ lab.state | default(iris_workshop_state) }}"
-      loop: "{{ server_results.results }}"
+        lab: "{{ iris_workshop_labs | selectattr('name', 'eq', name) | first | default }}"
+        name: "{{ item.item.lab.name }}"
+        state: "{{ item.item.lab.state | default(iris_workshop_state) }}"
+      loop: "{{ server_async_result.results }}"
       loop_control:
-        label: "{{ item.server.name }}"
+        label: "{{ item.item.lab.name }}"
       when: state == 'present'
 
 - name: Configure lab servers
