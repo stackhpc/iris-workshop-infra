@@ -68,7 +68,7 @@ from ansible.module_utils.openstack import (
     openstack_cloud_from_module, openstack_full_argument_spec)
 from novaclient.client import Client
 from novaclient.exceptions import NotFound
-import openstack
+import openstack.exceptions
 import time
 
 class OpenStackAuthConfig(Exception):
@@ -110,6 +110,10 @@ class ServerInterface(object):
                 if interface.id == attached_interface.net_id:
                     if self.state == 'absent':
                         server.interface_detach(port_id=attached_interface.port_id)
+                        try:
+                            self.cloud.delete_port(attached_interface.port_id)
+                        except openstack.exceptions.NotFoundException:
+                            pass
                         changed = True
                     elif self.state == 'present':
                         interface_exists = True
